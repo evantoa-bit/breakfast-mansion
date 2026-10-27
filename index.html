@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Breakfast Mansion — Fan Game</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#171419;color:#f6eee8;font:15px system-ui,Arial;display:grid;place-items:center;min-height:100vh}
+main{width:min(100%,1100px);padding:12px}
+h1{font-size:1.3rem;margin:0 0 4px}
+p{margin:0 0 10px;color:#cfc3bb}
+canvas{width:100%;display:block;aspect-ratio:16/9;background:#211b1c;border:1px solid #755e55;border-radius:9px;cursor:crosshair}
+.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:9px}
+button{background:#743332;color:#fff;border:1px solid #b58b7d;padding:8px 13px;border-radius:7px;font-weight:650;cursor:pointer}
+.help{color:#cfc3bb;font-size:.85rem;flex:1;min-width:240px}
+</style>
+</head>
+<body>
+<main>
+<h1>Breakfast Mansion — first-person fan game</h1>
+<p>Explore a modern mansion, face a maid-like anime opponent, and reach the exit. This is an original fan-inspired browser prototype, not the original video game.</p>
+<canvas id="g" width="960" height="540" aria-label="First person mansion game"></canvas>
+<div class="controls">
+<button id="start">Start / Resume</button>
+<button id="reload">Reload (R)</button>
+<button id="reset">Restart</button>
+<span class="help">WASD move · Mouse / ← → look · Left-click shoot · E interact · Shift run · Click game to lock mouse</span>
+</div>
+</main>
+<script>
+(()=>{
+const c=document.querySelector('#g'),x=c.getContext('2d'),W=c.width,H=c.height;
+const map=[
+"#################",
+"#...............#",
+"#..##...........#",
+"#..##....##.....#",
+"#......#........#",
+"#......#........#",
+"#...............#",
+"#.####..........#",
+"#...............#",
+"#.....##........#",
+"#...............#",
+"#...............#",
+"#################"];
+let px=2.5,py=2.5,a=.2,started=false,locked=false,ammo=6,reserve=24,hp=100,score=0,won=false,dead=false,flash=0,notice="",noticeT=0;
+const keys={}, enemy={x:8.5,y:5.5,hp:3,alive:true,attack:0,hit:0};
+const keyObj={x:12.5,y:2.5,got:false},exit={x:14.5,y:10.5};
+function clearWall(px,py){return map[Math.floor(py)]?.[Math.floor(px)]==='#'||!map[Math.floor(py)];}
+function move(dx,dy){if(!clearWall(px+dx,py))px+=dx;if(!clearWall(px,py+dy))py+=dy;}
+function msg(t){notice=t;noticeT=2.5}
+window.addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=true;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault();if(e.key.toLowerCase()==='e')interact();if(e.key.toLowerCase()==='r')reload();if(e.key==='Enter')started=true});
+window.addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+c.addEventListener('click',()=>{started=true;if(c.requestPointerLock)c.requestPointerLock();shoot()});
+document.addEventListener('pointerlockchange',()=>locked=document.pointerLockElement===c);
+document.addEventListener('mousemove',e=>{if(locked)a+=e.movementX*.003});
+document.querySelector('#start').onclick=()=>started=true;
+document.querySelector('#reload').onclick=reload;
+document.querySelector('#reset').onclick=()=>{px=2.5;py=2.5;a=.2;started=true;ammo=6;reserve=24;hp=100;score=0;won=dead=false;flash=0;enemy.x=8.5;enemy.y=5.5;enemy.hp=3;enemy.alive=true;enemy.attack=0;keyObj.got=false;msg('Find the key, then reach the exit.')};
+function reload(){if(ammo<6&&reserve>0&&!dead&&!won){let n=Math.min(6-ammo,reserve);ammo+=n;reserve-=n;msg('Reloaded.')}}
+function interact(){if(Math.hypot(px-keyObj.x,py-keyObj.y)<1.3&&!keyObj.got){keyObj.got=true;msg('Key picked up. Find the exit.')}else if(Math.hypot(px-exit.x,py-exit.y)<1.5){if(keyObj.got){won=true;msg('You escaped the mansion!')}else msg('Locked. Find the glowing key first.')}else msg('Nothing to interact with nearby.')}
+function cast(ray){for(let d=.02;d<20;d+=.025){let xx=px+Math.cos(ray)*d,yy=py+Math.sin(ray)*d;if(clearWall(xx,yy)){let fx=xx-Math.floor(xx),fy=yy-Math.floor(yy);return {d,side:(fx<.04||fx>.96)?0:1,fx,fy}}}return {d:20,side:0,fx:0,fy:0}}
+function shoot(){if(!started||dead||won)return;if(ammo<=0){msg('Click reload or press R.');return}ammo--;flash=.12;let dx=enemy.x-px,dy=enemy.y-py,dist=Math.hypot(dx,dy),rel=Math.atan2(dy,dx)-a;while(rel>Math.PI)rel-=2*Math.PI;while(rel< -Math.PI)rel+=2*Math.PI;if(enemy.alive&&Math.abs(rel)<.17&&dist<9){let blocked=false;for(let d=.2;d<dist;d+=.1)if(clearWall(px+Math.cos(a+rel)*d,py+Math.sin(a+rel)*d)){blocked=true;break}if(!blocked){enemy.hp--;enemy.hit=.2;if(enemy.hp<=0){enemy.alive=false;score++;msg('Opponent defeated! Find the key.')}else msg('Hit! Keep your distance.');return}}msg('Missed. Aim at the opponent.')}
+function update(dt){if(!started||dead||won)return;let s=(keys.shift ? .0038 : .0024)*dt*60,f=(keys.w||keys.arrowup?1:0)-(keys.s||keys.arrowdown?1:0),side=(keys.d?1:0)-(keys.a?1:0);move((Math.cos(a)*f+Math.cos(a+Math.PI/2)*side)*s,(Math.sin(a)*f+Math.sin(a+Math.PI/2)*side)*s);if(keys.arrowleft)a-=.045*dt*60;if(keys.arrowright)a+=.045*dt*60;if(enemy.alive){let dx=px-enemy.x,dy=py-enemy.y,d=Math.hypot(dx,dy);if(d>1.15){let sp=.00065*dt*60,nx=enemy.x+dx/d*sp,ny=enemy.y+dy/d*sp;if(!clearWall(nx,enemy.y))enemy.x=nx;if(!clearWall(enemy.x,ny))enemy.y=ny}else{enemy.attack-=dt;if(enemy.attack<=0){hp-=8;enemy.attack=1.2;msg('The opponent got close! Back away.');if(hp<=0){hp=0;dead=true}}}enemy.hit=Math.max(0,enemy.hit-dt)}if(flash>0)flash-=dt;if(noticeT>0)noticeT-=dt}
+function billboard(wx,wy,type,zbuf){let dx=wx-px,dy=wy-py,d=Math.hypot(dx,dy),r=Math.atan2(dy,dx)-a;while(r>Math.PI)r-=Math.PI*2;while(r< -Math.PI)r+=Math.PI*2;if(Math.abs(r)>.9||d<.2)return;let sx=W/2+Math.tan(r)*W*.58,size=Math.min(300,H/(d*.8)),zi=Math.max(0,Math.min(W-1,Math.floor(sx)));if(sx<0||sx>=W||d>zbuf[zi]+.2)return;let cy=H/2;if(type==='art'){x.fillStyle='#b89a70';x.fillRect(sx-size*.36,cy-size*.65,size*.72,size*.75);x.fillStyle='#123b45';x.fillRect(sx-size*.31,cy-size*.60,size*.62,size*.65);x.fillStyle='#b35438';x.fillRect(sx+size*.04,cy-size*.20,size*.24,size*.18)}if(type==='key'&&!keyObj.got){x.save();x.shadowColor='#ffe28a';x.shadowBlur=30;x.fillStyle='#ffe28a';x.beginPath();x.arc(sx,cy,size*.11,0,Math.PI*2);x.fill();x.fillRect(sx-size*.025,cy+size*.08,size*.05,size*.29);x.fillRect(sx-size*.025,cy+size*.25,size*.16,size*.05);x.restore()}if(type==='exit'){x.fillStyle='#191518';x.fillRect(sx-size*.28,cy-size*.8,size*.56,size*1.3);x.strokeStyle=keyObj.got?'#b8e6b4':'#914847';x.lineWidth=4;x.strokeRect(sx-size*.28,cy-size*.8,size*.56,size*1.3)}}
+function drawEnemy(zbuf){if(!enemy.alive)return;let dx=enemy.x-px,dy=enemy.y-py,d=Math.hypot(dx,dy),r=Math.atan2(dy,dx)-a;while(r>Math.PI)r-=Math.PI*2;while(r< -Math.PI)r+=Math.PI*2;if(Math.abs(r)>.85)return;let sx=W/2+Math.tan(r)*W*.58,size=Math.min(260,H/(d*.65)),zi=Math.max(0,Math.min(W-1,Math.floor(sx)));if(sx<0||sx>=W||d>zbuf[zi]+.2)return;let cy=H/2+size*.12;x.save();x.translate(sx,cy);if(enemy.hit>0)x.globalAlpha=.55;x.fillStyle='#f1d9c9';x.beginPath();x.ellipse(0,-size*.52,size*.13,size*.15,0,0,Math.PI*2);x.fill();x.fillStyle='#c58b4e';x.beginPath();x.moveTo(-size*.14,-size*.62);x.lineTo(-size*.11,-size*.79);x.lineTo(-size*.02,-size*.68);x.lineTo(size*.08,-size*.80);x.lineTo(size*.16,-size*.60);x.lineTo(size*.11,-size*.48);x.lineTo(-size*.12,-size*.48);x.fill();x.fillStyle='#fff';x.fillRect(-size*.16,-size*.66,size*.32,size*.05);x.fillStyle='#d44c62';x.fillRect(-size*.07,-size*.53,size*.14,size*.025);x.fillStyle='#e8e2dc';x.beginPath();x.moveTo(-size*.12,-size*.38);x.lineTo(-size*.23,size*.25);x.lineTo(size*.23,size*.25);x.lineTo(size*.12,-size*.38);x.closePath();x.fill();x.fillStyle='#39334b';x.beginPath();x.moveTo(-size*.13,-size*.38);x.lineTo(-size*.19,size*.25);x.lineTo(size*.19,size*.25);x.lineTo(size*.13,-size*.38);x.closePath();x.fill();x.fillStyle='#f1d9c9';x.fillRect(-size*.21,-size*.32,size*.06,size*.36);x.fillRect(size*.15,-size*.32,size*.06,size*.36);x.fillStyle='#fff';x.beginPath();x.moveTo(-size*.22,-size*.35);x.lineTo(-size*.31,-size*.2);x.lineTo(-size*.22,-size*.08);x.lineTo(-size*.14,-size*.25);x.fill();x.beginPath();x.moveTo(size*.22,-size*.35);x.lineTo(size*.31,-size*.2);x.lineTo(size*.22,-size*.08);x.lineTo(size*.14,-size*.25);x.fill();x.fillStyle='#242027';x.fillRect(-size*.14,size*.23,size*.11,size*.16);x.fillRect(size*.03,size*.23,size*.11,size*.16);x.restore()}
+function drawGun(){let bob=(keys.w||keys.a||keys.s||keys.d)?Math.sin(Date.now()*.012)*4:0,gx=W*.72,gy=H*.83+bob;x.save();x.translate(gx,gy);x.fillStyle='#101114';x.beginPath();x.moveTo(-45,65);x.lineTo(-20,-5);x.lineTo(3,-28);x.lineTo(35,-12);x.lineTo(48,40);x.lineTo(88,100);x.lineTo(-65,100);x.closePath();x.fill();x.fillStyle='#30343a';x.beginPath();x.moveTo(-12,-20);x.lineTo(35,-16);x.lineTo(52,7);x.lineTo(42,29);x.lineTo(-2,21);x.closePath();x.fill();x.fillStyle='#777b7f';x.fillRect(-2,-27,75,15);x.fillStyle='#1b1c20';x.fillRect(9,-33,62,7);x.fillStyle='#4c4e51';x.fillRect(45,-18,7,28);x.strokeStyle='#8e9295';x.lineWidth=2;x.strokeRect(4,-25,43,11);if(flash>0){x.fillStyle='#ffe9a2';x.beginPath();x.moveTo(75,-25);x.lineTo(112,-44);x.lineTo(101,-10);x.lineTo(124,2);x.lineTo(76,-2);x.fill()}x.restore()}
+function overlay(title,sub){x.fillStyle='rgba(8,6,8,.78)';x.fillRect(0,H*.36,W,H*.28);x.textAlign='center';x.fillStyle='#fff4e8';x.font='bold 28px system-ui';x.fillText(title,W/2,H*.47);x.font='16px system-ui';x.fillStyle='#d9cbc2';x.fillText(sub,W/2,H*.54);x.textAlign='left'}
+function render(){x.clearRect(0,0,W,H);let sky=x.createLinearGradient(0,0,0,H/2);sky.addColorStop(0,'#272329');sky.addColorStop(1,'#51413b');x.fillStyle=sky;x.fillRect(0,0,W,H/2);let fl=x.createLinearGradient(0,H/2,0,H);fl.addColorStop(0,'#4a302e');fl.addColorStop(1,'#20191b');x.fillStyle=fl;x.fillRect(0,H/2,W,H/2);for(let i=1;i<12;i++){let yy=H/2+i*i*2.5;x.strokeStyle='rgba(211,166,139,.14)';x.beginPath();x.moveTo(0,yy);x.lineTo(W,yy);x.stroke()}let z=[];for(let xx=0;xx<W;xx++){let ray=a+(xx/W-.5)*Math.PI/2.7,h=cast(ray),d=h.d*Math.cos(ray-a);z[xx]=d;let wh=Math.min(H*1.8,H/(d*.78)),top=(H-wh)/2,sh=Math.max(22,137-d*10)*(h.side?.72:1);x.fillStyle=`rgb(${sh},${sh*.75},${sh*.68})`;x.fillRect(xx,top,1,wh);if(Math.floor(h.fx*7)%4===0&&d<5){x.fillStyle='rgba(24,17,19,.22)';x.fillRect(xx,top,1,wh)}}billboard(6.5,2.5,'art',z);billboard(keyObj.x,keyObj.y,'key',z);billboard(exit.x,exit.y,'exit',z);drawEnemy(z);drawGun();x.fillStyle='rgba(8,7,9,.68)';x.fillRect(12,12,225,82);x.fillStyle='#fff1e7';x.font='bold 16px system-ui';x.fillText('BREAKFAST MANSION',24,34);x.font='14px system-ui';x.fillStyle='#e8d8cd';x.fillText('Health: '+hp+'%',24,56);x.fillText('Ammo: '+ammo+' / '+reserve,24,76);x.fillStyle='#332526';x.fillRect(24,82,180,7);x.fillStyle='#bd5a55';x.fillRect(24,82,180*hp/100,7);x.strokeStyle='rgba(255,255,255,.8)';x.lineWidth=2;x.beginPath();x.moveTo(W/2-8,H/2);x.lineTo(W/2+8,H/2);x.moveTo(W/2,H/2-8);x.lineTo(W/2,H/2+8);x.stroke();if(!started)overlay('CLICK START TO PLAY','Find the glowing key · watch out for the maid');else if(won)overlay('YOU ESCAPED!','Press Restart to play again');else if(dead)overlay('GAME OVER','Press Restart to try again');else if(noticeT>0){x.fillStyle='rgba(8,6,8,.72)';x.fillRect(W*.2,H-62,W*.6,38);x.textAlign='center';x.fillStyle='#fff1e7';x.font='15px system-ui';x.fillText(notice,W/2,H-38);x.textAlign='left'}requestAnimationFrame(render)}
+let last=performance.now();function loop(t){let dt=Math.min(.05,(t-last)/1000);last=t;update(dt);requestAnimationFrame(loop)}render();loop(performance.now());
+})();
+</script>
+</body>
+</html>
